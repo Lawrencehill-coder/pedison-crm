@@ -56,7 +56,6 @@ function updateStage(id,stage){
  const actor=actor_();if(!STAGES.includes(stage))throw Error('Invalid stage');
  const s=sheet_('Leads'),data=s.getDataRange().getValues(),index=data.findIndex((r,i)=>i>0&&r[0]===id);
  if(index<0)throw Error('Lead not found');
- s.getRange(index+1,7).setValue(data[index][6]); // preserve track
  s.getRange(index+1,9).setValue(stage);s.getRange(index+1,3).setValue(new Date());
  log_(actor,'STAGE',id,stage);return {ok:true};
 }
