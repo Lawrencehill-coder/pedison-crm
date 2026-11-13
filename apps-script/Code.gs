@@ -19,7 +19,8 @@ function config_(){
 function actor_(){
  const c=config_(),email=Session.getActiveUser().getEmail().toLowerCase();
  if(!email) throw Error('Sign in using an authorized Google Workspace account.');
- if(!(c.admins.includes(email)||(c.domain && email.endsWith('@'+c.domain)))) throw Error('Not authorized.');
+ if(!c.admins.length) throw Error('ADMIN_EMAILS must be configured before CRM access.');
+ if(!c.admins.includes(email)) throw Error('Not authorized.');
  return email;
 }
 function book_(){return SpreadsheetApp.openById(config_().id)}
@@ -66,6 +67,10 @@ function submitApplication(d){
  const fields={};
  Object.keys(d.fields).forEach(k=>{if(!allowed.includes(k))throw Error('Unexpected field: '+k);fields[k]=safe_(d.fields[k],2000)});
  if(!fields.certification||fields.certification!=='yes')throw Error('Applicant certification required');
+ if(d.track==='Business Loan' && (!fields.legalCompanyName||!fields.loanAmountRequested||!fields.owner1Name))throw Error('Company name, requested amount and first owner required');
+ if(d.track==='NCCB Credit Builder' && !fields.businessDescription)throw Error('Business description required');
+ const forbidden=/(?:social.?security|ssn|date.?of.?birth|dob|driver.?license.?number|bank.?account.?number|password)/i;
+ for(const [k,v] of Object.entries(fields)) if(forbidden.test(k))throw Error('Restricted identity field not allowed');
  if(JSON.stringify(fields).length>40000)throw Error('Application too large');
  const id=uid_('APP'),now=new Date();
  sheet_('Applications').appendRow([id,now,now,d.leadId,d.track,cell_(lead.company,160),'Received',JSON.stringify(fields),actor]);
@@ -76,4 +81,6 @@ const LOAN_FIELDS=["partnerId","intendedUseOfFunds","applicationDate","creditApp
 const NCCB_FIELDS=['dba','website','startDate','employees','streetAddress','mailingAddress','businessDescription','paymentTerms','salesTerritory','customerTypes','entityType','incorporationDate','incorporationState','tradeStyleRegistered','revenueCurrent','revenuePrior','revenueProjected','owner1Name','owner1Title','owner1Ownership','owner1Education','owner1Experience','owner1OtherBusinesses','owner2Name','owner2Title','owner2Ownership','owner2Education','owner2Experience','owner2OtherBusinesses','owner3Name','owner3Title','owner3Ownership','owner3Education','owner3Experience','owner3OtherBusinesses','certification',...Array.from({length:16},(_,i)=>['vendor'+(i+1)+'Name','vendor'+(i+1)+'Contact','vendor'+(i+1)+'Phone','vendor'+(i+1)+'Email','vendor'+(i+1)+'AccountRef','vendor'+(i+1)+'Bureau','vendor'+(i+1)+'Address','vendor'+(i+1)+'Product','vendor'+(i+1)+'Limit']).flat()];
 function addActivity(d){const actor=actor_();if(!rows_('Leads').some(x=>x.id===d.leadId))throw Error('Unknown lead');const id=uid_('ACT');sheet_('Activities').appendRow([id,new Date(),d.leadId,cell_(d.type,50),cell_(d.description,1200),actor]);log_(actor,'ACTIVITY',id,d.leadId);return {id}}
 function addTask(d){const actor=actor_();if(!rows_('Leads').some(x=>x.id===d.leadId))throw Error('Unknown lead');const id=uid_('TASK');sheet_('Tasks').appendRow([id,new Date(),d.leadId,cell_(d.dueDate,30),cell_(d.description,500),'Open',actor]);log_(actor,'TASK',id,d.leadId);return {id}}
+function completeTask(id){const actor=actor_();const s=sheet_('Tasks'),data=s.getDataRange().getValues(),i=data.findIndex((r,n)=>n>0&&r[0]===id);if(i<0)throw Error('Task not found');s.getRange(i+1,6).setValue('Done');log_(actor,'COMPLETE_TASK',id,'Done');return {ok:true}}
+function getApplication(id){actor_();const a=rows_('Applications').find(x=>x.id===id);if(!a)throw Error('Application not found');return a}
 function selfTest(){actor_();return {sheets:Object.keys(TABS).every(k=>!!book_().getSheetByName(k)),tracks:TRACKS.length,stages:STAGES.length,loanFields:LOAN_FIELDS.length,nccbFields:NCCB_FIELDS.length}}
